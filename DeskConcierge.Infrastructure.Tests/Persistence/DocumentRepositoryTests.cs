@@ -61,4 +61,35 @@ public class DocumentRepositoryTests
         await Assert.ThrowsAnyAsync<DbUpdateException>(
             () => repository.AddAsync(new Document("/inbox/b.pdf", "same-hash")));
     }
+
+    [Fact]
+    public async Task GetAllAsync_ReturnsSavedDocuments()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        await using var context = CreateContext(connection);
+        var repository = new DocumentRepository(context);
+        await repository.AddAsync(new Document("/inbox/a.pdf", "hash-a"));
+        await repository.AddAsync(new Document("/inbox/b.pdf", "hash-b"));
+
+        var all = await repository.GetAllAsync();
+
+        Assert.Equal(2, all.Count);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReturnsMatchingDocument()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        await using var context = CreateContext(connection);
+        var repository = new DocumentRepository(context);
+        var document = new Document("/inbox/a.pdf", "hash-a");
+        await repository.AddAsync(document);
+
+        var found = await repository.GetByIdAsync(document.Id);
+
+        Assert.NotNull(found);
+        Assert.Equal(document.Id, found!.Id);
+    }
 }

@@ -16,11 +16,13 @@ public sealed class DocumentIntakeService
 {
     private readonly IDocumentRepository _repository;
     private readonly IDocumentStorage _storage;
+    private readonly IOcrEngine _ocr;
 
-    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage)
+    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr)
     {
         _repository = repository;
         _storage = storage;
+        _ocr = ocr;
     }
 
     public async Task<IngestResult> IngestAsync(Stream content, string fileName, CancellationToken cancellationToken = default)
@@ -37,6 +39,12 @@ public sealed class DocumentIntakeService
         var storedPath = await _storage.SaveAsync(content, fileName, cancellationToken);
 
         var document = new Document(storedPath, hash);
+
+        // OCR runs inline on upload for now — in a real pipeline this would be a background worker (slow)
+        // a failure here currently fails the whole upload; production would store the doc and flag it for review
+        var ocr = await _ocr.ReadAsync(storedPath, cancellationToken);
+        document.ApplyOcr(ocr.Text, ocr.MeanConfidence);
+
         await _repository.AddAsync(document, cancellationToken);
         return new IngestResult(IngestOutcome.Created, document);
     }

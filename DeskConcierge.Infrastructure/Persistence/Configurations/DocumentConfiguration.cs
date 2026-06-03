@@ -22,5 +22,8 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
 
         builder.HasIndex(d => d.ContentHash)
             .IsUnique();
+
+        builder.Property(d => d.OcrText);
+        builder.Property(d => d.OcrConfidence);
     }
 }

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DeskConcierge</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 760px;
+            margin: 2.5rem auto;
+            padding: 0 1.25rem;
+            line-height: 1.5;
+        }
+        h1 { margin-bottom: 0.25rem; }
+        .sub { color: #888; margin-top: 0; }
+        form {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin: 1.5rem 0;
+            padding: 1rem;
+            border: 1px solid #ccc4;
+            border-radius: 10px;
+        }
+        button {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #8884;
+            cursor: pointer;
+        }
+        #status { margin: 0.5rem 0 1.5rem; min-height: 1.4rem; color: #888; }
+        .doc {
+            border: 1px solid #ccc4;
+            border-radius: 10px;
+            padding: 0.9rem 1.1rem;
+            margin-bottom: 0.9rem;
+        }
+        .doc .name {
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .doc .meta {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 0.15rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.05rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid #8884;
+            font-size: 0.8rem;
+        }
+        .doc .ocr { margin-top: 0.65rem; white-space: pre-wrap; }
+        .empty { color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>DeskConcierge</h1>
+    <p class="sub">Haushaltspost hochladen, lesen lassen, wiederfinden.</p>
+
+    <form id="upload-form">
+        <input type="file" id="file-input" accept="image/*" required>
+        <button type="submit">Hochladen</button>
+    </form>
+
+    <div id="status"></div>
+
+    <h2>Dokumente</h2>
+    <div id="list"></div>
+
+    <script>
+        const statusEl = document.getElementById("status");
+        const listEl = document.getElementById("list");
+
+        function displayName(path) {
+            const base = path.split(/[\\/]/).pop();
+            const underscore = base.indexOf("_");
+            // stored files are prefixed with a guid + "_"; show the original name
+            return underscore >= 0 ? base.slice(underscore + 1) : base;
+        }
+
+        function confidence(value) {
+            return value == null ? "–" : Math.round(value) + "%";
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function loadList() {
+            const response = await fetch("/api/documents");
+            const documents = await response.json();
+
+            if (documents.length === 0) {
+                listEl.innerHTML = '<p class="empty">Noch nichts hochgeladen.</p>';
+                return;
+            }
+
+            listEl.innerHTML = documents.map(d => `
+                <div class="doc">
+                    <div class="name">${escapeHtml(displayName(d.originalPath))}</div>
+                    <div class="meta">
+                        ${new Date(d.createdAt).toLocaleString("de-DE")}
+                        &nbsp;·&nbsp; <span class="badge">OCR ${confidence(d.ocrConfidence)}</span>
+                    </div>
+                    <div class="ocr">${d.ocrPreview ? escapeHtml(d.ocrPreview) : '<span class="empty">kein Text erkannt</span>'}</div>
+                </div>
+            `).join("");
+        }
+
+        document.getElementById("upload-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const input = document.getElementById("file-input");
+            if (!input.files.length) return;
+
+            const data = new FormData();
+            data.append("file", input.files[0]);
+
+            statusEl.textContent = "Wird verarbeitet …";
+            const response = await fetch("/api/documents", { method: "POST", body: data });
+
+            if (response.status === 201) {
+                statusEl.textContent = "Hinzugefügt.";
+            } else if (response.status === 409) {
+                statusEl.textContent = "Schon vorhanden – Duplikat erkannt.";
+            } else {
+                statusEl.textContent = "Fehler beim Upload (" + response.status + ").";
+            }
+
+            input.value = "";
+            await loadList();
+        });
+
+        loadList();
+    </script>
+</body>
+</html>
