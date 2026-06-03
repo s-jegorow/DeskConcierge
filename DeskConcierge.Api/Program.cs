@@ -1,6 +1,18 @@
+using DeskConcierge.Core.Abstractions;
+using DeskConcierge.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+var connectionString = builder.Configuration.GetConnectionString("DeskConcierge")
+    ?? "Data Source=deskconcierge.db";
+
+builder.Services.AddDbContext<DeskConciergeDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 
 var app = builder.Build();
 

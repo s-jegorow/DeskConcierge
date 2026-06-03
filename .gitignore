@@ -15,6 +15,9 @@ Thumbs.db
 
 # Runtime
 *.log
+*.db
+*.db-shm
+*.db-wal
 
 #Docs
 docs/

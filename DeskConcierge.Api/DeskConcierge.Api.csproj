@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DeskConcierge.Core\DeskConcierge.Core.csproj" />
+    <ProjectReference Include="..\DeskConcierge.Infrastructure\DeskConcierge.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
