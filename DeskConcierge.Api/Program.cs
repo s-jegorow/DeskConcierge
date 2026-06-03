@@ -1,5 +1,6 @@
 using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Application;
+using DeskConcierge.Infrastructure.Ocr;
 using DeskConcierge.Infrastructure.Persistence;
 using DeskConcierge.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,7 @@ builder.Services.AddDbContext<DeskConciergeDbContext>(options =>
 
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IDocumentStorage, InboxDocumentStorage>();
+builder.Services.AddScoped<IOcrEngine, TesseractOcrEngine>();
 builder.Services.AddScoped<DocumentIntakeService>();
 
 var app = builder.Build();
@@ -32,6 +34,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapGet("/api/health", () => new { status = "ok" });
 
@@ -53,5 +58,36 @@ app.MapPost("/api/documents", async (IFormFile file, DocumentIntakeService intak
         ? Results.Created($"/api/documents/{result.Document.Id}", dto)
         : Results.Conflict(dto);
 }).DisableAntiforgery();
+
+app.MapGet("/api/documents", async (IDocumentRepository repository, CancellationToken ct) =>
+{
+    var documents = await repository.GetAllAsync(ct);
+    var summaries = documents.Select(d => new
+    {
+        d.Id,
+        d.OriginalPath,
+        d.CreatedAt,
+        d.ContentHash,
+        d.OcrConfidence,
+        OcrPreview = d.OcrText is { Length: > 160 } text ? text[..160] + "…" : d.OcrText
+    });
+    return Results.Ok(summaries);
+});
+
+app.MapGet("/api/documents/{id:guid}", async (Guid id, IDocumentRepository repository, CancellationToken ct) =>
+{
+    var document = await repository.GetByIdAsync(id, ct);
+    return document is null
+        ? Results.NotFound()
+        : Results.Ok(new
+        {
+            document.Id,
+            document.OriginalPath,
+            document.CreatedAt,
+            document.ContentHash,
+            document.OcrConfidence,
+            document.OcrText
+        });
+});
 
 app.Run();

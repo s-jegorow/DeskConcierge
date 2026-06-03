@@ -6,6 +6,8 @@ public sealed class Document
     public string OriginalPath { get; }
     public DateTimeOffset CreatedAt { get; }
     public string ContentHash { get; }
+    public string? OcrText { get; private set; }
+    public float? OcrConfidence { get; private set; }
 
     public Document(string originalPath, string contentHash)
     {
@@ -18,5 +20,11 @@ public sealed class Document
         OriginalPath = originalPath;
         ContentHash = contentHash;
         CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ApplyOcr(string text, float confidence)
+    {
+        OcrText = text;
+        OcrConfidence = confidence;
     }
 }

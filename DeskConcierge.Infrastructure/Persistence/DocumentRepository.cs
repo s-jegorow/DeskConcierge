@@ -23,4 +23,23 @@ public sealed class DocumentRepository : IDocumentRepository
     {
         return _db.Documents.FirstOrDefaultAsync(d => d.ContentHash == contentHash, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<Document>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        // SQLite can't ORDER BY a DateTimeOffset, so we sort in memory; fine for a small archive
+        var documents = await _db.Documents
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return documents
+            .OrderByDescending(d => d.CreatedAt)
+            .ToList();
+    }
+
+    public Task<Document?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return _db.Documents
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+    }
 }
