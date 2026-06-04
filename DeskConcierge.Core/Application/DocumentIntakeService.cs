@@ -17,12 +17,14 @@ public sealed class DocumentIntakeService
     private readonly IDocumentRepository _repository;
     private readonly IDocumentStorage _storage;
     private readonly IOcrEngine _ocr;
+    private readonly FieldExtractor _extractor;
 
-    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr)
+    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr, FieldExtractor extractor)
     {
         _repository = repository;
         _storage = storage;
         _ocr = ocr;
+        _extractor = extractor;
     }
 
     public async Task<IngestResult> IngestAsync(Stream content, string fileName, CancellationToken cancellationToken = default)
@@ -33,17 +35,16 @@ public sealed class DocumentIntakeService
         if (existing is not null)
             return new IngestResult(IngestOutcome.Duplicate, existing);
 
-        // hashing the upload before writing it to disk, so a duplicate never touches the inbox
-        // not 100% sure the extra rewind is worth it for very large files
+        // hash before writing, so a duplicate never touches the inbox
         content.Position = 0;
         var storedPath = await _storage.SaveAsync(content, fileName, cancellationToken);
 
         var document = new Document(storedPath, hash);
 
-        // OCR runs inline on upload for now; in a real pipeline this would be a background worker (slow)
-        // a failure here currently fails the whole upload; production would store the doc and flag it for review
+        // ocr inline on upload for now; really a background worker's job
         var ocr = await _ocr.ReadAsync(storedPath, cancellationToken);
         document.ApplyOcr(ocr.Text, ocr.MeanConfidence);
+        document.ApplyExtraction(_extractor.Extract(ocr.Text));
 
         await _repository.AddAsync(document, cancellationToken);
         return new IngestResult(IngestOutcome.Created, document);
