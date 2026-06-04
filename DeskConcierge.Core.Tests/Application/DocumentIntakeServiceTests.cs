@@ -2,6 +2,7 @@ using System.Text;
 using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Application;
 using DeskConcierge.Core.Domain;
+using DeskConcierge.Core.Pipeline;
 using Xunit;
 
 namespace DeskConcierge.Core.Tests.Application;
@@ -16,7 +17,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository();
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine();
-        var service = new DocumentIntakeService(repository, storage, ocr);
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor());
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -37,7 +38,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository(existing);
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine();
-        var service = new DocumentIntakeService(repository, storage, ocr);
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor());
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -47,6 +48,20 @@ public class DocumentIntakeServiceTests
         Assert.Empty(repository.Saved);
         Assert.Equal(0, storage.SaveCount);
         Assert.Equal(0, ocr.ReadCount);
+    }
+
+    [Fact]
+    public async Task IngestAsync_RunsFieldExtractionOnOcrText()
+    {
+        var repository = new FakeRepository();
+        var storage = new FakeStorage();
+        var ocr = new FakeOcrEngine("Bitte zahlen auf DE89 3704 0044 0532 0130 00");
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor());
+        using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
+
+        var result = await service.IngestAsync(content, "scan.pdf");
+
+        Assert.Equal("DE89370400440532013000", result.Document.Iban);
     }
 
     private sealed class FakeRepository : IDocumentRepository
@@ -86,12 +101,16 @@ public class DocumentIntakeServiceTests
 
     private sealed class FakeOcrEngine : IOcrEngine
     {
+        private readonly string _text;
+
+        public FakeOcrEngine(string text = "hello world") => _text = text;
+
         public int ReadCount { get; private set; }
 
         public Task<OcrResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
         {
             ReadCount++;
-            return Task.FromResult(new OcrResult("hello world", 95f));
+            return Task.FromResult(new OcrResult(_text, 95f));
         }
     }
 }

@@ -1,5 +1,6 @@
 using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Application;
+using DeskConcierge.Core.Pipeline;
 using DeskConcierge.Infrastructure.Ocr;
 using DeskConcierge.Infrastructure.Persistence;
 using DeskConcierge.Infrastructure.Storage;
@@ -18,6 +19,7 @@ builder.Services.AddDbContext<DeskConciergeDbContext>(options =>
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IDocumentStorage, InboxDocumentStorage>();
 builder.Services.AddScoped<IOcrEngine, TesseractOcrEngine>();
+builder.Services.AddScoped<FieldExtractor>();
 builder.Services.AddScoped<DocumentIntakeService>();
 
 var app = builder.Build();
@@ -25,7 +27,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<DeskConciergeDbContext>();
-    db.Database.Migrate(); // auto-applying migrations on startup is fine for dev; revisit before this runs anywhere real
+    db.Database.Migrate(); // fine for dev, revisit before production
 }
 
 if (app.Environment.IsDevelopment())
@@ -69,6 +71,10 @@ app.MapGet("/api/documents", async (IDocumentRepository repository, Cancellation
         d.CreatedAt,
         d.ContentHash,
         d.OcrConfidence,
+        d.Iban,
+        d.Date,
+        d.Amount,
+        d.InvoiceNumber,
         OcrPreview = d.OcrText is { Length: > 160 } text ? text[..160] + "…" : d.OcrText
     });
     return Results.Ok(summaries);
@@ -86,7 +92,15 @@ app.MapGet("/api/documents/{id:guid}", async (Guid id, IDocumentRepository repos
             document.CreatedAt,
             document.ContentHash,
             document.OcrConfidence,
-            document.OcrText
+            document.OcrText,
+            document.Iban,
+            document.IbanConfidence,
+            document.Date,
+            document.DateConfidence,
+            document.Amount,
+            document.AmountConfidence,
+            document.InvoiceNumber,
+            document.InvoiceNumberConfidence
         });
 });
 

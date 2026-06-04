@@ -9,6 +9,16 @@ public sealed class Document
     public string? OcrText { get; private set; }
     public float? OcrConfidence { get; private set; }
 
+    // flat columns on the document for now, own extraction table can come later
+    public string? Iban { get; private set; }
+    public float? IbanConfidence { get; private set; }
+    public string? Date { get; private set; }
+    public float? DateConfidence { get; private set; }
+    public string? Amount { get; private set; }
+    public float? AmountConfidence { get; private set; }
+    public string? InvoiceNumber { get; private set; }
+    public float? InvoiceNumberConfidence { get; private set; }
+
     public Document(string originalPath, string contentHash)
     {
         if (string.IsNullOrWhiteSpace(originalPath))
@@ -26,5 +36,17 @@ public sealed class Document
     {
         OcrText = text;
         OcrConfidence = confidence;
+    }
+
+    public void ApplyExtraction(ExtractedFields fields)
+    {
+        Iban = fields.Iban?.Value;
+        IbanConfidence = fields.Iban?.Confidence;
+        Date = fields.Date?.Value;
+        DateConfidence = fields.Date?.Confidence;
+        Amount = fields.Amount?.Value;
+        AmountConfidence = fields.Amount?.Confidence;
+        InvoiceNumber = fields.InvoiceNumber?.Value;
+        InvoiceNumberConfidence = fields.InvoiceNumber?.Confidence;
     }
 }

@@ -55,6 +55,7 @@
             border: 1px solid #8884;
             font-size: 0.8rem;
         }
+        .doc .fields { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
         .doc .ocr { margin-top: 0.65rem; white-space: pre-wrap; }
         .empty { color: #888; font-style: italic; }
     </style>
@@ -88,6 +89,15 @@
             return value == null ? "–" : Math.round(value) + "%";
         }
 
+        function fieldBadges(d) {
+            const found = [];
+            if (d.iban) found.push("IBAN " + d.iban);
+            if (d.date) found.push("Datum " + d.date);
+            if (d.amount) found.push("Betrag " + d.amount);
+            if (d.invoiceNumber) found.push("Rg.-Nr. " + d.invoiceNumber);
+            return found.map(f => `<span class="badge">${escapeHtml(f)}</span>`).join(" ");
+        }
+
         function escapeHtml(text) {
             const div = document.createElement("div");
             div.textContent = text;
@@ -110,6 +120,7 @@
                         ${new Date(d.createdAt).toLocaleString("de-DE")}
                         &nbsp;·&nbsp; <span class="badge">OCR ${confidence(d.ocrConfidence)}</span>
                     </div>
+                    <div class="fields">${fieldBadges(d)}</div>
                     <div class="ocr">${d.ocrPreview ? escapeHtml(d.ocrPreview) : '<span class="empty">kein Text erkannt</span>'}</div>
                 </div>
             `).join("");
