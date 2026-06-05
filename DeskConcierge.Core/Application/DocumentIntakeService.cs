@@ -18,13 +18,17 @@ public sealed class DocumentIntakeService
     private readonly IDocumentStorage _storage;
     private readonly IOcrEngine _ocr;
     private readonly FieldExtractor _extractor;
+    private readonly IDocumentAnalyzer _analyzer;
+    private readonly IDocumentArchive _archive;
 
-    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr, FieldExtractor extractor)
+    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr, FieldExtractor extractor, IDocumentAnalyzer analyzer, IDocumentArchive archive)
     {
         _repository = repository;
         _storage = storage;
         _ocr = ocr;
         _extractor = extractor;
+        _analyzer = analyzer;
+        _archive = archive;
     }
 
     public async Task<IngestResult> IngestAsync(Stream content, string fileName, CancellationToken cancellationToken = default)
@@ -45,6 +49,22 @@ public sealed class DocumentIntakeService
         var ocr = await _ocr.ReadAsync(storedPath, cancellationToken);
         document.ApplyOcr(ocr.Text, ocr.MeanConfidence);
         document.ApplyExtraction(_extractor.Extract(ocr.Text));
+
+        // llm understanding — a fallback, so a model that's down must not sink the upload
+        try
+        {
+            var analysis = await _analyzer.AnalyzeAsync(ocr.Text, cancellationToken);
+            if (analysis is not null)
+                document.ApplyAnalysis(analysis);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // model unreachable/slow — keep the document, analysis can be reprocessed later
+        }
+
+        // move the original out of the inbox into the readable archive + drop a sidecar
+        var archivedPath = await _archive.FileAsync(document, cancellationToken);
+        document.Relocate(archivedPath);
 
         await _repository.AddAsync(document, cancellationToken);
         return new IngestResult(IngestOutcome.Created, document);

@@ -55,6 +55,17 @@
             border: 1px solid #8884;
             font-size: 0.8rem;
         }
+        .badge .badge-key {
+            color: #888;
+            font-weight: 600;
+            margin-right: 0.35rem;
+        }
+        .badge .badge-val { font-variant-numeric: tabular-nums; }
+        .badge.action { border-color: #c5503fcc; color: #d9684f; }
+        .badge.termin { border-style: dashed; }
+        .doc .sender { font-size: 0.9rem; color: #aaa; margin-top: 0.15rem; }
+        .doc .summary { margin-top: 0.5rem; }
+        .doc .termine { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
         .doc .fields { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
         .doc .ocr { margin-top: 0.65rem; white-space: pre-wrap; }
         .empty { color: #888; font-style: italic; }
@@ -80,22 +91,37 @@
 
         function displayName(path) {
             const base = path.split(/[\\/]/).pop();
-            const underscore = base.indexOf("_");
-            // stored files are prefixed with a guid + "_"; show the original name
-            return underscore >= 0 ? base.slice(underscore + 1) : base;
+            // old inbox files are "<guid>_<original>"; archive files keep their sprechenden name
+            const m = base.match(/^[0-9a-f]{32}_(.+)$/i);
+            return m ? m[1] : base;
         }
 
         function confidence(value) {
             return value == null ? "–" : Math.round(value) + "%";
         }
 
+        function formatIban(value) {
+            // group into blocks of four for readability
+            return value.replace(/(.{4})/g, "$1 ").trim();
+        }
+
         function fieldBadges(d) {
             const found = [];
-            if (d.iban) found.push("IBAN " + d.iban);
-            if (d.date) found.push("Datum " + d.date);
-            if (d.amount) found.push("Betrag " + d.amount);
-            if (d.invoiceNumber) found.push("Rg.-Nr. " + d.invoiceNumber);
-            return found.map(f => `<span class="badge">${escapeHtml(f)}</span>`).join(" ");
+            if (d.iban) found.push(["IBAN", formatIban(d.iban)]);
+            if (d.date) found.push(["Datum", d.date]);
+            if (d.amount) found.push(["Betrag", d.amount + " €"]);
+            if (d.invoiceNumber) found.push(["Rg.-Nr.", d.invoiceNumber]);
+            return found.map(([key, val]) =>
+                `<span class="badge"><span class="badge-key">${key}</span><span class="badge-val">${escapeHtml(val)}</span></span>`
+            ).join(" ");
+        }
+
+        function termineBadges(d) {
+            if (!d.appointments || d.appointments.length === 0) return "";
+            const items = d.appointments.map(t =>
+                `<span class="badge termin">📅 ${escapeHtml(t.date)}${t.subject ? " — " + escapeHtml(t.subject) : ""}</span>`
+            ).join(" ");
+            return `<div class="termine">${items}</div>`;
         }
 
         function escapeHtml(text) {
@@ -119,7 +145,12 @@
                     <div class="meta">
                         ${new Date(d.createdAt).toLocaleString("de-DE")}
                         &nbsp;·&nbsp; <span class="badge">OCR ${confidence(d.ocrConfidence)}</span>
+                        ${d.documentType ? `<span class="badge">${escapeHtml(d.documentType)}</span>` : ""}
+                        ${d.actionRequired ? `<span class="badge action">⚠ Handlungsbedarf</span>` : ""}
                     </div>
+                    ${d.sender ? `<div class="sender">Absender: ${escapeHtml(d.sender)}</div>` : ""}
+                    ${d.summary ? `<div class="summary">${escapeHtml(d.summary)}</div>` : ""}
+                    ${termineBadges(d)}
                     <div class="fields">${fieldBadges(d)}</div>
                     <div class="ocr">${d.ocrPreview ? escapeHtml(d.ocrPreview) : '<span class="empty">kein Text erkannt</span>'}</div>
                 </div>

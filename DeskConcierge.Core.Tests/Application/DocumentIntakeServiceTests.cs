@@ -17,7 +17,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository();
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine();
-        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor());
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive());
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -29,6 +29,7 @@ public class DocumentIntakeServiceTests
         Assert.Equal(1, ocr.ReadCount);
         Assert.Equal("hello world", result.Document.OcrText);
         Assert.Equal(95f, result.Document.OcrConfidence);
+        Assert.StartsWith("/store/archived/", result.Document.OriginalPath);
     }
 
     [Fact]
@@ -38,7 +39,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository(existing);
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine();
-        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor());
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive());
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -56,12 +57,69 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository();
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine("Bitte zahlen auf DE89 3704 0044 0532 0130 00");
-        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor());
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive());
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
 
         Assert.Equal("DE89370400440532013000", result.Document.Iban);
+    }
+
+    [Fact]
+    public async Task IngestAsync_AppliesAnalysisToDocument()
+    {
+        var repository = new FakeRepository();
+        var analysis = new DocumentAnalysis("Stadtwerke Musterstadt", "Rechnung", "Stromabrechnung.",
+            new[] { new Appointment("30.06.2026", "Zahlungsziel") }, true);
+        var service = new DocumentIntakeService(repository, new FakeStorage(), new FakeOcrEngine(),
+            new FieldExtractor(), new FakeDocumentAnalyzer(analysis), new FakeArchive());
+        using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
+
+        var result = await service.IngestAsync(content, "scan.pdf");
+
+        Assert.Equal("Stadtwerke Musterstadt", result.Document.Sender);
+        Assert.Equal("Rechnung", result.Document.DocumentType);
+        Assert.True(result.Document.ActionRequired);
+    }
+
+    [Fact]
+    public async Task IngestAsync_AnalyzerThrows_StillCreatesDocument()
+    {
+        var repository = new FakeRepository();
+        var service = new DocumentIntakeService(repository, new FakeStorage(), new FakeOcrEngine(),
+            new FieldExtractor(), new FakeDocumentAnalyzer(throws: true), new FakeArchive());
+        using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
+
+        var result = await service.IngestAsync(content, "scan.pdf");
+
+        Assert.Equal(IngestOutcome.Created, result.Outcome);
+        Assert.Single(repository.Saved);
+        Assert.Null(result.Document.Sender);
+    }
+
+    private sealed class FakeDocumentAnalyzer : IDocumentAnalyzer
+    {
+        private readonly DocumentAnalysis? _analysis;
+        private readonly bool _throws;
+
+        public FakeDocumentAnalyzer(DocumentAnalysis? analysis = null, bool throws = false)
+        {
+            _analysis = analysis;
+            _throws = throws;
+        }
+
+        public Task<DocumentAnalysis?> AnalyzeAsync(string ocrText, CancellationToken cancellationToken = default)
+        {
+            if (_throws)
+                throw new InvalidOperationException("model down");
+            return Task.FromResult(_analysis);
+        }
+    }
+
+    private sealed class FakeArchive : IDocumentArchive
+    {
+        public Task<string> FileAsync(Document document, CancellationToken cancellationToken = default)
+            => Task.FromResult($"/store/archived/{document.Id}{Path.GetExtension(document.OriginalPath)}");
     }
 
     private sealed class FakeRepository : IDocumentRepository

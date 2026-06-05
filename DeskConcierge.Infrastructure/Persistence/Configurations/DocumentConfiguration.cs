@@ -34,5 +34,11 @@ public sealed class DocumentConfiguration : IEntityTypeConfiguration<Document>
         builder.Property(d => d.AmountConfidence);
         builder.Property(d => d.InvoiceNumber);
         builder.Property(d => d.InvoiceNumberConfidence);
+
+        builder.Property(d => d.Sender);
+        builder.Property(d => d.DocumentType);
+        builder.Property(d => d.Summary);
+        builder.Property(d => d.ActionRequired);
+        builder.Property(d => d.AppointmentsJson);
     }
 }
