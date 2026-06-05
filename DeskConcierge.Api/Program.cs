@@ -1,6 +1,9 @@
+using System.Text.Json;
 using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Application;
+using DeskConcierge.Core.Domain;
 using DeskConcierge.Core.Pipeline;
+using DeskConcierge.Infrastructure.Llm;
 using DeskConcierge.Infrastructure.Ocr;
 using DeskConcierge.Infrastructure.Persistence;
 using DeskConcierge.Infrastructure.Storage;
@@ -18,9 +21,14 @@ builder.Services.AddDbContext<DeskConciergeDbContext>(options =>
 
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IDocumentStorage, InboxDocumentStorage>();
+builder.Services.AddScoped<IDocumentArchive, FileSystemDocumentArchive>();
 builder.Services.AddScoped<IOcrEngine, TesseractOcrEngine>();
 builder.Services.AddScoped<FieldExtractor>();
 builder.Services.AddScoped<DocumentIntakeService>();
+
+var ollamaOptions = builder.Configuration.GetSection("Llm").Get<OllamaOptions>() ?? new OllamaOptions();
+builder.Services.AddSingleton(ollamaOptions);
+builder.Services.AddHttpClient<IDocumentAnalyzer, OllamaDocumentAnalyzer>();
 
 var app = builder.Build();
 
@@ -75,6 +83,11 @@ app.MapGet("/api/documents", async (IDocumentRepository repository, Cancellation
         d.Date,
         d.Amount,
         d.InvoiceNumber,
+        d.Sender,
+        d.DocumentType,
+        d.Summary,
+        d.ActionRequired,
+        Appointments = ParseAppointments(d.AppointmentsJson),
         OcrPreview = d.OcrText is { Length: > 160 } text ? text[..160] + "…" : d.OcrText
     });
     return Results.Ok(summaries);
@@ -100,8 +113,25 @@ app.MapGet("/api/documents/{id:guid}", async (Guid id, IDocumentRepository repos
             document.Amount,
             document.AmountConfidence,
             document.InvoiceNumber,
-            document.InvoiceNumberConfidence
+            document.InvoiceNumberConfidence,
+            document.Sender,
+            document.DocumentType,
+            document.Summary,
+            document.ActionRequired,
+            Appointments = ParseAppointments(document.AppointmentsJson)
         });
 });
 
+static Appointment[] ParseAppointments(string? json)
+    => string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<Appointment[]>(json) ?? [];
+
+// smoke test for the llm stage: paste ocr text, see what the model makes of it
+app.MapPost("/api/analyze", async (AnalyzeRequest body, IDocumentAnalyzer analyzer, CancellationToken ct) =>
+{
+    var analysis = await analyzer.AnalyzeAsync(body.Text, ct);
+    return analysis is null ? Results.NoContent() : Results.Ok(analysis);
+});
+
 app.Run();
+
+record AnalyzeRequest(string Text);

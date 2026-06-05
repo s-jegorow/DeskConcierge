@@ -58,6 +58,24 @@ public class FieldExtractorTests
     }
 
     [Fact]
+    public void Extract_Amount_PrefersLabelledTotalOverFirstLineItem()
+    {
+        var fields = _extractor.Extract("Grundgebühr 12,90 EUR Verbrauch 85,44 EUR Gesamtbetrag 1.234,56 EUR");
+
+        Assert.NotNull(fields.Amount);
+        Assert.Equal("1.234,56", fields.Amount!.Value);
+    }
+
+    [Fact]
+    public void Extract_Amount_WithoutLabel_PicksLargest()
+    {
+        var fields = _extractor.Extract("Posten A 5,00 und Posten B 42,00 sowie C 9,99");
+
+        Assert.NotNull(fields.Amount);
+        Assert.Equal("42,00", fields.Amount!.Value);
+    }
+
+    [Fact]
     public void Extract_InvoiceNumber_NeedsLabel()
     {
         var labelled = _extractor.Extract("Rechnungsnummer: RG-2026-0815");

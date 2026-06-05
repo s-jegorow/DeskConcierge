@@ -1,9 +1,11 @@
+using System.Text.Json;
+
 namespace DeskConcierge.Core.Domain;
 
 public sealed class Document
 {
     public Guid Id { get; }
-    public string OriginalPath { get; }
+    public string OriginalPath { get; private set; }
     public DateTimeOffset CreatedAt { get; }
     public string ContentHash { get; }
     public string? OcrText { get; private set; }
@@ -18,6 +20,13 @@ public sealed class Document
     public float? AmountConfidence { get; private set; }
     public string? InvoiceNumber { get; private set; }
     public float? InvoiceNumberConfidence { get; private set; }
+
+    // llm understanding, flat for now: appointments as json (own table once the deadline worker needs it)
+    public string? Sender { get; private set; }
+    public string? DocumentType { get; private set; }
+    public string? Summary { get; private set; }
+    public bool? ActionRequired { get; private set; }
+    public string? AppointmentsJson { get; private set; }
 
     public Document(string originalPath, string contentHash)
     {
@@ -48,5 +57,24 @@ public sealed class Document
         AmountConfidence = fields.Amount?.Confidence;
         InvoiceNumber = fields.InvoiceNumber?.Value;
         InvoiceNumberConfidence = fields.InvoiceNumber?.Confidence;
+    }
+
+    // file moved from the inbox into the archive
+    public void Relocate(string newPath)
+    {
+        if (string.IsNullOrWhiteSpace(newPath))
+            throw new ArgumentException("New path must not be empty.", nameof(newPath));
+        OriginalPath = newPath;
+    }
+
+    public void ApplyAnalysis(DocumentAnalysis analysis)
+    {
+        Sender = analysis.Sender;
+        DocumentType = analysis.DocumentType;
+        Summary = analysis.Summary;
+        ActionRequired = analysis.ActionRequired;
+        AppointmentsJson = analysis.Appointments.Count > 0
+            ? JsonSerializer.Serialize(analysis.Appointments)
+            : null;
     }
 }

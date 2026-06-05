@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using DeskConcierge.Core.Domain;
 
@@ -13,6 +14,11 @@ public sealed class FieldExtractor
 
     // german amounts like 1.234,56
     private static readonly Regex AmountPattern = new(@"\b\d{1,3}(?:\.\d{3})*,\d{2}\b", RegexOptions.Compiled);
+
+    // amount right after a "total" label: the figure we actually want, not the first line item
+    private static readonly Regex TotalAmountPattern = new(
+        @"(?:Gesamtbetrag|Gesamtsumme|Rechnungsbetrag|Endbetrag|Gesamt|Summe|Total|zu\s+zahlen(?:der\s+Betrag)?)\D{0,15}(\d{1,3}(?:\.\d{3})*,\d{2})",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex InvoicePattern = new(
         @"(?:Rechnungsnummer|Rechnungs-?Nr\.?|Rg\.?-?Nr\.?|Rechnung\s+Nr\.?)\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9\-/]*)",
@@ -55,14 +61,26 @@ public sealed class FieldExtractor
 
     private static ExtractedField? FindAmount(string text)
     {
+        // a labelled total beats everything else
+        var total = TotalAmountPattern.Match(text);
+        if (total.Success)
+            return new ExtractedField(total.Groups[1].Value, 0.9f);
+
         var matches = AmountPattern.Matches(text);
         if (matches.Count == 0)
             return null;
+        if (matches.Count == 1)
+            return new ExtractedField(matches[0].Value, 0.7f);
 
-        // same as dates: several are common, take the first
-        var confidence = matches.Count == 1 ? 0.7f : 0.5f;
-        return new ExtractedField(matches[0].Value, confidence);
+        // no total label, several amounts: the largest is the safest guess at the sum
+        var largest = matches.Cast<Match>()
+            .OrderByDescending(m => ParseGermanAmount(m.Value))
+            .First();
+        return new ExtractedField(largest.Value, 0.5f);
     }
+
+    private static decimal ParseGermanAmount(string value) =>
+        decimal.Parse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("de-DE"));
 
     private static ExtractedField? FindInvoiceNumber(string text)
     {
