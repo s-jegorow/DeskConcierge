@@ -1,186 +1,783 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>DeskConcierge</title>
-    <style>
-        :root { color-scheme: light dark; }
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            max-width: 760px;
-            margin: 2.5rem auto;
-            padding: 0 1.25rem;
-            line-height: 1.5;
-        }
-        h1 { margin-bottom: 0.25rem; }
-        .sub { color: #888; margin-top: 0; }
-        form {
-            display: flex;
-            gap: 0.75rem;
-            align-items: center;
-            margin: 1.5rem 0;
-            padding: 1rem;
-            border: 1px solid #ccc4;
-            border-radius: 10px;
-        }
-        button {
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            border: 1px solid #8884;
-            cursor: pointer;
-        }
-        #status { margin: 0.5rem 0 1.5rem; min-height: 1.4rem; color: #888; }
-        .doc {
-            border: 1px solid #ccc4;
-            border-radius: 10px;
-            padding: 0.9rem 1.1rem;
-            margin-bottom: 0.9rem;
-        }
-        .doc .name {
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .doc .meta {
-            font-size: 0.85rem;
-            color: #888;
-            margin-top: 0.15rem;
-        }
-        .badge {
-            display: inline-block;
-            padding: 0.05rem 0.45rem;
-            border-radius: 999px;
-            border: 1px solid #8884;
-            font-size: 0.8rem;
-        }
-        .badge .badge-key {
-            color: #888;
-            font-weight: 600;
-            margin-right: 0.35rem;
-        }
-        .badge .badge-val { font-variant-numeric: tabular-nums; }
-        .badge.action { border-color: #c5503fcc; color: #d9684f; }
-        .badge.termin { border-style: dashed; }
-        .doc .sender { font-size: 0.9rem; color: #aaa; margin-top: 0.15rem; }
-        .doc .summary { margin-top: 0.5rem; }
-        .doc .termine { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
-        .doc .fields { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
-        .doc .ocr { margin-top: 0.65rem; white-space: pre-wrap; }
-        .empty { color: #888; font-style: italic; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskConcierge</title>
+<style>
+  :root {
+    --bg:           #f5f4f2;
+    --bg-surface:   #ffffff;
+    --bg-row-hover: #eeede9;
+    --bg-row-sel:   #e6e4df;
+    --border:       #c8c5be;
+    --border-light: #dddad3;
+    --text:         #1a1a18;
+    --text-muted:   #6b6860;
+    --text-dim:     #9a9690;
+    --accent:       #8a3a2f;
+    --accent-border:#8a3a2f;
+    --font-ui:      system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-serif:   Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --font-mono:    ui-monospace, "SF Mono", Menlo, "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:           #1e1d1b;
+      --bg-surface:   #252422;
+      --bg-row-hover: #2e2c29;
+      --bg-row-sel:   #343230;
+      --border:       #3d3b37;
+      --border-light: #302e2b;
+      --text:         #e8e5df;
+      --text-muted:   #9a9690;
+      --text-dim:     #6b6860;
+      --accent:       #b85a4a;
+      --accent-border:#b85a4a;
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 44px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .wordmark {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text);
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .status {
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 0;
+  }
+
+  .upload-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #file-input { display: none; }
+  .btn-upload {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    padding: 4px 10px;
+    background: var(--bg-surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .btn-upload:hover { background: var(--bg-row-hover); }
+  .btn-upload:disabled { color: var(--text-dim); cursor: default; }
+
+  /* ── Main layout ── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── List panel ── */
+  .list-panel {
+    width: 300px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .list-toolbar {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    gap: 6px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .search-wrap {
+    position: relative;
+    flex: 1;
+  }
+  .search-input {
+    width: 100%;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    padding: 4px 24px 4px 8px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  .search-input:focus { border-color: var(--text-muted); }
+  .search-clear {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 3px;
+    font-family: var(--font-ui);
+    display: none;
+  }
+  .search-clear:hover { color: var(--text); }
+  .search-clear.visible { display: block; }
+
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+  }
+  .filter-select {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    padding: 3px 5px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .filter-select:focus { border-color: var(--text-muted); }
+  .filter-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-checkbox-label input[type="checkbox"] {
+    accent-color: var(--text-muted);
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+  }
+
+  .group-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px 8px;
+    border-top: 1px solid var(--border-light);
+  }
+  .group-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .filter-select.group-select { flex: 1; }
+
+  .result-count {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-surface);
+    letter-spacing: 0.01em;
+  }
+
+  .list-body {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .group-heading {
+    padding: 8px 12px 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border-light);
+    margin-top: 4px;
+  }
+  .group-heading:first-child { margin-top: 0; }
+
+  .doc-item {
+    padding: 10px 14px 10px 16px;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.08s;
+  }
+  .doc-item:hover { background: var(--bg-row-hover); }
+  .doc-item.selected { background: var(--bg-row-sel); }
+  .doc-item.action-required { border-left-color: var(--accent-border); }
+
+  .doc-item-sender {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .doc-item-meta {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .list-empty {
+    padding: 24px 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  /* ── Detail panel ── */
+  .detail-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    background: var(--bg);
+  }
+
+  .detail-empty {
+    color: var(--text-dim);
+    margin-top: 48px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .detail-head {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .detail-sender {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .detail-type-date {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .action-badge {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 2px 8px 2px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    border-left: 2px solid var(--accent-border);
+    padding-left: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .section { margin-bottom: 22px; }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .summary-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .summary-text.na { color: var(--text-dim); }
+
+  .field-list {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 0;
+    border-top: 1px solid var(--border-light);
+  }
+  .field-list dt,
+  .field-list dd {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .field-list dt {
+    color: var(--text-muted);
+    padding-right: 12px;
+  }
+  .field-list dd {
+    font-family: var(--font-mono);
+    color: var(--text);
+    font-size: 11.5px;
+  }
+  .field-list dd.na {
+    font-family: var(--font-ui);
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .termine-list {
+    list-style: none;
+    border-top: 1px solid var(--border-light);
+  }
+  .termine-list li {
+    display: flex;
+    gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .termine-list .t-date {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    width: 90px;
+  }
+  .termine-list .t-subject { color: var(--text); }
+
+  .ocr-text {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+    max-width: 65ch;
+    white-space: pre-wrap;
+    margin-top: 4px;
+  }
+  .ocr-text.na {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .original-link {
+    display: inline-block;
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .original-link:hover { color: var(--text); }
+
+  .conf-note {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    margin-bottom: 6px;
+  }
+</style>
 </head>
 <body>
-    <h1>DeskConcierge</h1>
-    <p class="sub">Haushaltspost hochladen, lesen lassen, wiederfinden.</p>
 
-    <form id="upload-form">
-        <input type="file" id="file-input" accept="image/*" required>
-        <button type="submit">Hochladen</button>
-    </form>
+<header class="header">
+  <span class="wordmark">DeskConcierge</span>
+  <div class="header-actions">
+    <span class="status" id="status"></span>
+    <div class="upload-group">
+      <input type="file" id="file-input" accept="image/*,application/pdf">
+      <button class="btn-upload" id="upload-btn">Hochladen</button>
+    </div>
+  </div>
+</header>
 
-    <div id="status"></div>
+<div class="main">
+  <nav class="list-panel">
+    <div class="list-toolbar">
+      <div class="search-row">
+        <div class="search-wrap">
+          <input type="text" class="search-input" id="search-input" placeholder="Suchen …">
+          <button class="search-clear" id="search-clear" title="Suche leeren">&#x2715;</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <select class="filter-select" id="filter-type">
+          <option value="">Alle Typen</option>
+        </select>
+        <select class="filter-select" id="filter-year">
+          <option value="">Alle Jahre</option>
+        </select>
+        <label class="filter-checkbox-label">
+          <input type="checkbox" id="filter-action">
+          Nur Handlungsbedarf
+        </label>
+      </div>
+      <div class="group-row">
+        <span class="group-label">Gruppieren nach:</span>
+        <select class="filter-select group-select" id="group-by">
+          <option value="time">Zeit (Jahr-Monat)</option>
+          <option value="sender">Absender</option>
+          <option value="type">Typ</option>
+        </select>
+      </div>
+    </div>
+    <div class="result-count" id="result-count"></div>
+    <div class="list-body" id="list-body"></div>
+  </nav>
+  <section class="detail-panel" id="detail-panel">
+    <p class="detail-empty">Wird geladen …</p>
+  </section>
+</div>
 
-    <h2>Dokumente</h2>
-    <div id="list"></div>
+<script>
+let docs = [];
+let selectedId = null;
 
-    <script>
-        const statusEl = document.getElementById("status");
-        const listEl = document.getElementById("list");
+function esc(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
-        function displayName(path) {
-            const base = path.split(/[\\/]/).pop();
-            // old inbox files are "<guid>_<original>"; archive files keep their sprechenden name
-            const m = base.match(/^[0-9a-f]{32}_(.+)$/i);
-            return m ? m[1] : base;
-        }
+// upload timestamp (ISO) → DD.MM.YYYY for display
+function fmtDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = n => String(n).padStart(2, "0");
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
 
-        function confidence(value) {
-            return value == null ? "–" : Math.round(value) + "%";
-        }
+function getYear(doc) { return String(new Date(doc.created).getFullYear()); }
+function getYearMonth(doc) {
+  const d = new Date(doc.created);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+const MONTH_NAMES = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+function formatYearMonth(ym) {
+  const [y, m] = ym.split("-");
+  return MONTH_NAMES[+m - 1] + " " + y;
+}
 
-        function formatIban(value) {
-            // group into blocks of four for readability
-            return value.replace(/(.{4})/g, "$1 ").trim();
-        }
+// map the api document onto the shape the view uses; date axis is the upload time (reliable), not the heuristic doc date
+function mapDoc(d) {
+  return {
+    id: d.id,
+    sender: d.sender || "Unbekannter Absender",
+    type: d.documentType || "Sonstiges",
+    created: d.createdAt,
+    dateDisplay: fmtDate(d.createdAt),
+    docDate: d.date || null,
+    ocrConfidence: d.ocrConfidence,
+    summary: d.summary || "",
+    actionRequired: d.actionRequired === true,
+    betrag: d.amount || null,
+    iban: d.iban || null,
+    invoiceNumber: d.invoiceNumber || null,
+    termine: Array.isArray(d.appointments) ? d.appointments : [],
+    ocrText: d.ocrText || ""
+  };
+}
 
-        function fieldBadges(d) {
-            const found = [];
-            if (d.iban) found.push(["IBAN", formatIban(d.iban)]);
-            if (d.date) found.push(["Datum", d.date]);
-            if (d.amount) found.push(["Betrag", d.amount + " €"]);
-            if (d.invoiceNumber) found.push(["Rg.-Nr.", d.invoiceNumber]);
-            return found.map(([key, val]) =>
-                `<span class="badge"><span class="badge-key">${key}</span><span class="badge-val">${escapeHtml(val)}</span></span>`
-            ).join(" ");
-        }
+function populateFilters() {
+  const types = [...new Set(docs.map(d => d.type))].sort((a, b) => a.localeCompare(b, "de"));
+  const years = [...new Set(docs.map(d => getYear(d)))].sort((a, b) => +b - +a);
 
-        function termineBadges(d) {
-            if (!d.appointments || d.appointments.length === 0) return "";
-            const items = d.appointments.map(t =>
-                `<span class="badge termin">📅 ${escapeHtml(t.date)}${t.subject ? " - " + escapeHtml(t.subject) : ""}</span>`
-            ).join(" ");
-            return `<div class="termine">${items}</div>`;
-        }
+  const selType = document.getElementById("filter-type");
+  const prevType = selType.value;
+  selType.innerHTML = '<option value="">Alle Typen</option>';
+  types.forEach(t => selType.add(new Option(t, t)));
+  if ([...selType.options].some(o => o.value === prevType)) selType.value = prevType;
 
-        function escapeHtml(text) {
-            const div = document.createElement("div");
-            div.textContent = text;
-            return div.innerHTML;
-        }
+  const selYear = document.getElementById("filter-year");
+  const prevYear = selYear.value;
+  selYear.innerHTML = '<option value="">Alle Jahre</option>';
+  years.forEach(y => selYear.add(new Option(y, y)));
+  if ([...selYear.options].some(o => o.value === prevYear)) selYear.value = prevYear;
+}
 
-        async function loadList() {
-            const response = await fetch("/api/documents");
-            const documents = await response.json();
+function getFilteredDocs() {
+  const q = document.getElementById("search-input").value.trim().toLowerCase();
+  const typeVal = document.getElementById("filter-type").value;
+  const yearVal = document.getElementById("filter-year").value;
+  const onlyAction = document.getElementById("filter-action").checked;
 
-            if (documents.length === 0) {
-                listEl.innerHTML = '<p class="empty">Noch nichts hochgeladen.</p>';
-                return;
-            }
+  return docs.filter(doc => {
+    if (typeVal && doc.type !== typeVal) return false;
+    if (yearVal && getYear(doc) !== yearVal) return false;
+    if (onlyAction && !doc.actionRequired) return false;
+    if (q) {
+      const haystack = [
+        doc.sender, doc.type, doc.summary, doc.betrag,
+        doc.iban, doc.invoiceNumber, doc.docDate, doc.dateDisplay, doc.ocrText
+      ].map(v => (v || "").toLowerCase()).join(" ");
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
 
-            listEl.innerHTML = documents.map(d => `
-                <div class="doc">
-                    <div class="name">${escapeHtml(displayName(d.originalPath))}</div>
-                    <div class="meta">
-                        ${new Date(d.createdAt).toLocaleString("de-DE")}
-                        &nbsp;·&nbsp; <span class="badge">OCR ${confidence(d.ocrConfidence)}</span>
-                        ${d.documentType ? `<span class="badge">${escapeHtml(d.documentType)}</span>` : ""}
-                        ${d.actionRequired ? `<span class="badge action">⚠ Handlungsbedarf</span>` : ""}
-                    </div>
-                    ${d.sender ? `<div class="sender">Absender: ${escapeHtml(d.sender)}</div>` : ""}
-                    ${d.summary ? `<div class="summary">${escapeHtml(d.summary)}</div>` : ""}
-                    ${termineBadges(d)}
-                    <div class="fields">${fieldBadges(d)}</div>
-                    <div class="ocr">${d.ocrPreview ? escapeHtml(d.ocrPreview) : '<span class="empty">kein Text erkannt</span>'}</div>
-                </div>
-            `).join("");
-        }
+function groupDocs(filtered, groupBy) {
+  const sorted = [...filtered].sort((a, b) => new Date(b.created) - new Date(a.created));
 
-        document.getElementById("upload-form").addEventListener("submit", async (event) => {
-            event.preventDefault();
-            const input = document.getElementById("file-input");
-            if (!input.files.length) return;
+  if (groupBy === "time") {
+    const map = new Map();
+    sorted.forEach(doc => {
+      const key = getYearMonth(doc);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(doc);
+    });
+    return [...map.entries()].map(([key, items]) => ({ label: formatYearMonth(key), items }));
+  }
 
-            const data = new FormData();
-            data.append("file", input.files[0]);
+  const keyOf = groupBy === "sender" ? (d => d.sender) : (d => d.type);
+  const map = new Map();
+  sorted.forEach(doc => {
+    const key = keyOf(doc);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(doc);
+  });
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], "de"))
+    .map(([key, items]) => ({ label: key, items }));
+}
 
-            statusEl.textContent = "Wird verarbeitet …";
-            const response = await fetch("/api/documents", { method: "POST", body: data });
+function renderList(filtered) {
+  const groupBy = document.getElementById("group-by").value;
+  const groups = groupDocs(filtered, groupBy);
+  const body = document.getElementById("list-body");
+  body.innerHTML = "";
 
-            if (response.status === 201) {
-                statusEl.textContent = "Hinzugefügt.";
-            } else if (response.status === 409) {
-                statusEl.textContent = "Schon vorhanden – Duplikat erkannt.";
-            } else {
-                statusEl.textContent = "Fehler beim Upload (" + response.status + ").";
-            }
+  if (filtered.length === 0) {
+    const msg = document.createElement("div");
+    msg.className = "list-empty";
+    msg.textContent = docs.length === 0 ? "Noch nichts hochgeladen." : "Keine Treffer.";
+    body.appendChild(msg);
+    return;
+  }
 
-            input.value = "";
-            await loadList();
-        });
+  groups.forEach(group => {
+    if (group.label) {
+      const heading = document.createElement("div");
+      heading.className = "group-heading";
+      heading.textContent = group.label + " (" + group.items.length + ")";
+      body.appendChild(heading);
+    }
+    group.items.forEach(doc => {
+      const item = document.createElement("div");
+      item.className = "doc-item" +
+        (doc.actionRequired ? " action-required" : "") +
+        (doc.id === selectedId ? " selected" : "");
+      item.innerHTML =
+        `<div class="doc-item-sender">${esc(doc.sender)}</div>` +
+        `<div class="doc-item-meta">${esc(doc.type)} &middot; ${esc(doc.dateDisplay)}</div>`;
+      item.addEventListener("click", () => selectDoc(doc.id));
+      body.appendChild(item);
+    });
+  });
+}
 
-        loadList();
-    </script>
+function field(label, value) {
+  return value
+    ? `<dt>${label}</dt><dd>${esc(value)}</dd>`
+    : `<dt>${label}</dt><dd class="na">-</dd>`;
+}
+
+function renderDetail(doc) {
+  const panel = document.getElementById("detail-panel");
+
+  const actionHtml = doc.actionRequired
+    ? `<div class="action-badge">Handlungsbedarf</div>` : "";
+
+  const summaryHtml = doc.summary
+    ? `<div class="summary-text">${esc(doc.summary)}</div>`
+    : `<div class="summary-text na">Keine Zusammenfassung.</div>`;
+
+  let termineHtml = "";
+  if (doc.termine.length > 0) {
+    const items = doc.termine.map(t =>
+      `<li><span class="t-date">${esc(t.date)}</span><span class="t-subject">${esc(t.subject)}</span></li>`
+    ).join("");
+    termineHtml = `
+      <div class="section">
+        <div class="section-title">Fristen &amp; Termine</div>
+        <ul class="termine-list">${items}</ul>
+      </div>`;
+  }
+
+  const conf = doc.ocrConfidence != null ? Math.round(doc.ocrConfidence) + " %" : "-";
+  const ocrHtml = doc.ocrText
+    ? `<pre class="ocr-text">${esc(doc.ocrText)}</pre>`
+    : `<div class="ocr-text na">Kein Text erkannt.</div>`;
+
+  panel.innerHTML = `
+    <div class="detail-head">
+      <div class="detail-sender">${esc(doc.sender)}</div>
+      <div class="detail-type-date">${esc(doc.type)} &middot; Eingang ${esc(doc.dateDisplay)}</div>
+      ${actionHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Zusammenfassung</div>
+      ${summaryHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Felder</div>
+      <dl class="field-list">
+        ${field("Dokumentdatum", doc.docDate)}
+        ${field("Betrag", doc.betrag ? doc.betrag + " EUR" : null)}
+        ${field("IBAN", doc.iban)}
+        ${field("Rechnungsnr.", doc.invoiceNumber)}
+      </dl>
+    </div>
+
+    ${termineHtml}
+
+    <div class="section">
+      <div class="section-title">Volltext</div>
+      <div class="conf-note">OCR-Genauigkeit: ${conf}</div>
+      ${ocrHtml}
+    </div>
+
+    <a class="original-link" href="/api/documents/${encodeURIComponent(doc.id)}/original" target="_blank" rel="noopener">Original ansehen</a>
+  `;
+}
+
+function updateResultCount(filtered) {
+  document.getElementById("result-count").textContent =
+    filtered.length + " von " + docs.length + " Dokumenten";
+}
+
+function applyFilters() {
+  const filtered = getFilteredDocs();
+  updateResultCount(filtered);
+
+  const ids = new Set(filtered.map(d => d.id));
+  if (!ids.has(selectedId)) {
+    selectedId = filtered.length > 0 ? filtered[0].id : null;
+  }
+
+  renderList(filtered);
+
+  if (selectedId !== null) {
+    const doc = docs.find(d => d.id === selectedId);
+    if (doc) renderDetail(doc);
+  } else {
+    document.getElementById("detail-panel").innerHTML =
+      `<p class="detail-empty">${docs.length === 0 ? "Noch nichts hochgeladen." : "Kein Dokument ausgewählt."}</p>`;
+  }
+}
+
+function selectDoc(id) {
+  selectedId = id;
+  renderList(getFilteredDocs());
+  const doc = docs.find(d => d.id === id);
+  if (doc) renderDetail(doc);
+}
+
+function setStatus(text) {
+  document.getElementById("status").textContent = text || "";
+}
+
+async function loadDocuments() {
+  const response = await fetch("/api/documents");
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  const data = await response.json();
+  docs = data.map(mapDoc);
+  populateFilters();
+  applyFilters();
+}
+
+// ── search box ──
+const searchInput = document.getElementById("search-input");
+searchInput.addEventListener("input", () => {
+  document.getElementById("search-clear").classList.toggle("visible", searchInput.value.length > 0);
+  applyFilters();
+});
+document.getElementById("search-clear").addEventListener("click", () => {
+  searchInput.value = "";
+  document.getElementById("search-clear").classList.remove("visible");
+  applyFilters();
+});
+
+// ── filters / grouping ──
+["filter-type", "filter-year", "filter-action", "group-by"].forEach(id =>
+  document.getElementById(id).addEventListener("change", applyFilters));
+
+// ── upload ──
+const fileInput = document.getElementById("file-input");
+const uploadBtn = document.getElementById("upload-btn");
+uploadBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", async () => {
+  if (!fileInput.files.length) return;
+  const data = new FormData();
+  data.append("file", fileInput.files[0]);
+
+  uploadBtn.disabled = true;
+  setStatus("Wird verarbeitet …");
+  try {
+    const response = await fetch("/api/documents", { method: "POST", body: data });
+    if (response.status === 201) {
+      setStatus("Hinzugefügt.");
+      selectedId = null; // let the newest land on top and get selected
+    } else if (response.status === 409) {
+      setStatus("Duplikat – schon vorhanden.");
+    } else {
+      setStatus("Fehler beim Upload (" + response.status + ").");
+    }
+    await loadDocuments();
+  } catch {
+    setStatus("Fehler beim Upload.");
+  } finally {
+    fileInput.value = "";
+    uploadBtn.disabled = false;
+  }
+});
+
+// ── init ──
+loadDocuments().catch(() => {
+  document.getElementById("detail-panel").innerHTML =
+    `<p class="detail-empty">Dokumente konnten nicht geladen werden.</p>`;
+});
+</script>
 </body>
 </html>

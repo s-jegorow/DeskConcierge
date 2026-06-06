@@ -136,6 +136,9 @@ public class DocumentIntakeServiceTests
             return Task.CompletedTask;
         }
 
+        public Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
         public Task<Document?> FindByHashAsync(string contentHash, CancellationToken cancellationToken = default)
             => Task.FromResult(_existing is not null && _existing.ContentHash == contentHash ? _existing : null);
 
