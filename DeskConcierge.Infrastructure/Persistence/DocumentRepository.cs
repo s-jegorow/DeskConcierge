@@ -19,6 +19,12 @@ public sealed class DocumentRepository : IDocumentRepository
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
+    {
+        _db.Documents.Update(document);
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<Document?> FindByHashAsync(string contentHash, CancellationToken cancellationToken = default)
     {
         return _db.Documents.FirstOrDefaultAsync(d => d.ContentHash == contentHash, cancellationToken);

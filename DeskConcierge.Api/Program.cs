@@ -25,6 +25,7 @@ builder.Services.AddScoped<IDocumentArchive, FileSystemDocumentArchive>();
 builder.Services.AddScoped<IOcrEngine, TesseractOcrEngine>();
 builder.Services.AddScoped<FieldExtractor>();
 builder.Services.AddScoped<DocumentIntakeService>();
+builder.Services.AddScoped<DocumentReprocessor>();
 
 var ollamaOptions = builder.Configuration.GetSection("Llm").Get<OllamaOptions>() ?? new OllamaOptions();
 builder.Services.AddSingleton(ollamaOptions);
@@ -88,9 +89,17 @@ app.MapGet("/api/documents", async (IDocumentRepository repository, Cancellation
         d.Summary,
         d.ActionRequired,
         Appointments = ParseAppointments(d.AppointmentsJson),
-        OcrPreview = d.OcrText is { Length: > 160 } text ? text[..160] + "…" : d.OcrText
+        // full text so the frontend can search across it; move to a server-side query/FTS once the archive grows
+        d.OcrText
     });
     return Results.Ok(summaries);
+});
+
+// re-run the pipeline on leftovers still sitting in the inbox (predate the archive stage)
+app.MapPost("/api/documents/reprocess", async (DocumentReprocessor reprocessor, CancellationToken ct) =>
+{
+    var count = await reprocessor.ReprocessInboxAsync(ct);
+    return Results.Ok(new { reprocessed = count });
 });
 
 app.MapGet("/api/documents/{id:guid}", async (Guid id, IDocumentRepository repository, CancellationToken ct) =>
@@ -122,8 +131,29 @@ app.MapGet("/api/documents/{id:guid}", async (Guid id, IDocumentRepository repos
         });
 });
 
+// serve the stored original so the frontend can show it; path comes from the db, not the caller
+app.MapGet("/api/documents/{id:guid}/original", async (Guid id, IDocumentRepository repository, CancellationToken ct) =>
+{
+    var document = await repository.GetByIdAsync(id, ct);
+    if (document is null || !File.Exists(document.OriginalPath))
+        return Results.NotFound();
+
+    var stream = File.OpenRead(document.OriginalPath);
+    return Results.File(stream, ContentTypeFor(document.OriginalPath), Path.GetFileName(document.OriginalPath), enableRangeProcessing: true);
+});
+
 static Appointment[] ParseAppointments(string? json)
     => string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<Appointment[]>(json) ?? [];
+
+static string ContentTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+{
+    ".pdf" => "application/pdf",
+    ".png" => "image/png",
+    ".jpg" or ".jpeg" => "image/jpeg",
+    ".tif" or ".tiff" => "image/tiff",
+    ".webp" => "image/webp",
+    _ => "application/octet-stream"
+};
 
 // smoke test for the llm stage — paste ocr text, see what the model makes of it
 app.MapPost("/api/analyze", async (AnalyzeRequest body, IDocumentAnalyzer analyzer, CancellationToken ct) =>
