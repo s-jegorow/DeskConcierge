@@ -54,9 +54,33 @@ public sealed class FieldExtractor
         if (matches.Count == 0)
             return null;
 
-        // letters often carry several dates, take the first, trust it less
-        var confidence = matches.Count == 1 ? 0.8f : 0.5f;
-        return new ExtractedField(matches[0].Value, confidence);
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var future = new List<string>();
+        var past = new List<string>();
+
+        foreach (Match match in matches)
+        {
+            var parts = match.Value.Split('.');
+            if (parts.Length != 3) continue;
+            if (!int.TryParse(parts[0], out var day) ||
+                !int.TryParse(parts[1], out var month) ||
+                !int.TryParse(parts[2], out var year)) continue;
+            if (year < 100) year += 2000;
+
+            try
+            {
+                var d = new DateOnly(year, month, day);
+                (d > today ? future : past).Add(match.Value);
+            }
+            catch (ArgumentOutOfRangeException) { } // discard invalid ocr dates like 32.13.2026
+        }
+
+        // deadlines lie in the future; document/print dates lie in the past
+        if (future.Count > 0)
+            return new ExtractedField(future[0], MathF.Round(1f / future.Count, 2));
+        if (past.Count > 0)
+            return new ExtractedField(past[0], MathF.Round(0.4f / past.Count, 2));
+        return null;
     }
 
     private static ExtractedField? FindAmount(string text)

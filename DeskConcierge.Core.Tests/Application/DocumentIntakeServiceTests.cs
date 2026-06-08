@@ -3,6 +3,7 @@ using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Application;
 using DeskConcierge.Core.Domain;
 using DeskConcierge.Core.Pipeline;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace DeskConcierge.Core.Tests.Application;
@@ -17,7 +18,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository();
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine();
-        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive());
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive(), NullLogger<DocumentIntakeService>.Instance);
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -39,7 +40,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository(existing);
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine();
-        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive());
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive(), NullLogger<DocumentIntakeService>.Instance);
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -57,7 +58,7 @@ public class DocumentIntakeServiceTests
         var repository = new FakeRepository();
         var storage = new FakeStorage();
         var ocr = new FakeOcrEngine("Bitte zahlen auf DE89 3704 0044 0532 0130 00");
-        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive());
+        var service = new DocumentIntakeService(repository, storage, ocr, new FieldExtractor(), new FakeDocumentAnalyzer(), new FakeArchive(), NullLogger<DocumentIntakeService>.Instance);
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -72,7 +73,7 @@ public class DocumentIntakeServiceTests
         var analysis = new DocumentAnalysis("Stadtwerke Musterstadt", "Rechnung", "Stromabrechnung.",
             new[] { new Appointment("30.06.2026", "Zahlungsziel") }, true);
         var service = new DocumentIntakeService(repository, new FakeStorage(), new FakeOcrEngine(),
-            new FieldExtractor(), new FakeDocumentAnalyzer(analysis), new FakeArchive());
+            new FieldExtractor(), new FakeDocumentAnalyzer(analysis), new FakeArchive(), NullLogger<DocumentIntakeService>.Instance);
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
@@ -87,7 +88,7 @@ public class DocumentIntakeServiceTests
     {
         var repository = new FakeRepository();
         var service = new DocumentIntakeService(repository, new FakeStorage(), new FakeOcrEngine(),
-            new FieldExtractor(), new FakeDocumentAnalyzer(throws: true), new FakeArchive());
+            new FieldExtractor(), new FakeDocumentAnalyzer(throws: true), new FakeArchive(), NullLogger<DocumentIntakeService>.Instance);
         using var content = new MemoryStream(Encoding.UTF8.GetBytes("abc"));
 
         var result = await service.IngestAsync(content, "scan.pdf");
