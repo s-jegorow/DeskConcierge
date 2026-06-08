@@ -1,6 +1,7 @@
 using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Domain;
 using DeskConcierge.Core.Pipeline;
+using Microsoft.Extensions.Logging;
 
 namespace DeskConcierge.Core.Application;
 
@@ -20,8 +21,9 @@ public sealed class DocumentIntakeService
     private readonly FieldExtractor _extractor;
     private readonly IDocumentAnalyzer _analyzer;
     private readonly IDocumentArchive _archive;
+    private readonly ILogger<DocumentIntakeService> _logger;
 
-    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr, FieldExtractor extractor, IDocumentAnalyzer analyzer, IDocumentArchive archive)
+    public DocumentIntakeService(IDocumentRepository repository, IDocumentStorage storage, IOcrEngine ocr, FieldExtractor extractor, IDocumentAnalyzer analyzer, IDocumentArchive archive, ILogger<DocumentIntakeService> logger)
     {
         _repository = repository;
         _storage = storage;
@@ -29,6 +31,7 @@ public sealed class DocumentIntakeService
         _extractor = extractor;
         _analyzer = analyzer;
         _archive = archive;
+        _logger = logger;
     }
 
     public async Task<IngestResult> IngestAsync(Stream content, string fileName, CancellationToken cancellationToken = default)
@@ -37,11 +40,15 @@ public sealed class DocumentIntakeService
 
         var existing = await _repository.FindByHashAsync(hash, cancellationToken);
         if (existing is not null)
+        {
+            _logger.LogInformation("duplicate upload ignored: {FileName} (hash {Hash})", fileName, hash[..8]);
             return new IngestResult(IngestOutcome.Duplicate, existing);
+        }
 
         // hash before writing, so a duplicate never touches the inbox
         content.Position = 0;
         var storedPath = await _storage.SaveAsync(content, fileName, cancellationToken);
+        _logger.LogInformation("stored {FileName} → {Path}", fileName, storedPath);
 
         var document = new Document(storedPath, hash);
 
@@ -59,7 +66,7 @@ public sealed class DocumentIntakeService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // model unreachable/slow — keep the document, analysis can be reprocessed later
+            _logger.LogWarning(ex, "llm analysis failed for {FileName} — document saved without analysis", fileName);
         }
 
         // move the original out of the inbox into the readable archive + drop a sidecar
@@ -67,6 +74,7 @@ public sealed class DocumentIntakeService
         document.Relocate(archivedPath);
 
         await _repository.AddAsync(document, cancellationToken);
+        _logger.LogInformation("ingested {FileName} → {ArchivedPath} (ocr {Confidence:P0})", fileName, archivedPath, ocr.MeanConfidence / 100f);
         return new IngestResult(IngestOutcome.Created, document);
     }
 }

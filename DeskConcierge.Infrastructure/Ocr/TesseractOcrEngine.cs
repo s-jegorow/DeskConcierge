@@ -1,17 +1,29 @@
 using System.Diagnostics;
 using System.Globalization;
 using DeskConcierge.Core.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace DeskConcierge.Infrastructure.Ocr;
 
 public sealed class TesseractOcrEngine : IOcrEngine
 {
+    private readonly ILogger<TesseractOcrEngine> _logger;
+
+    public TesseractOcrEngine(ILogger<TesseractOcrEngine> logger)
+    {
+        _logger = logger;
+    }
+
     // shelling out to the tesseract CLI — most reliable on macOS; could swap for an in-process engine behind IOcrEngine
     public async Task<OcrResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        return Path.GetExtension(filePath).Equals(".pdf", StringComparison.OrdinalIgnoreCase)
+        _logger.LogDebug("ocr start: {FilePath}", filePath);
+        var result = Path.GetExtension(filePath).Equals(".pdf", StringComparison.OrdinalIgnoreCase)
             ? await ReadPdfAsync(filePath, cancellationToken)
             : await ReadImageAsync(filePath, cancellationToken);
+        _logger.LogDebug("ocr done: {FilePath} — {Words} words, confidence {Confidence:F1}%",
+            filePath, result.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length, result.MeanConfidence);
+        return result;
     }
 
     private static async Task<OcrResult> ReadImageAsync(string filePath, CancellationToken cancellationToken)

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Domain;
+using Microsoft.Extensions.Logging;
 
 namespace DeskConcierge.Infrastructure.Llm;
 
@@ -10,18 +11,22 @@ public sealed class OllamaDocumentAnalyzer : IDocumentAnalyzer
 {
     private readonly HttpClient _http;
     private readonly string _model;
+    private readonly ILogger<OllamaDocumentAnalyzer> _logger;
 
-    public OllamaDocumentAnalyzer(HttpClient http, OllamaOptions options)
+    public OllamaDocumentAnalyzer(HttpClient http, OllamaOptions options, ILogger<OllamaDocumentAnalyzer> logger)
     {
         _http = http;
         _model = options.Model;
         _http.BaseAddress ??= new Uri(options.Endpoint);
+        _logger = logger;
     }
 
     public async Task<DocumentAnalysis?> AnalyzeAsync(string ocrText, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(ocrText))
             return null;
+
+        _logger.LogDebug("sending {Chars} chars to {Model}", ocrText.Length, _model);
 
         var request = new
         {
@@ -41,7 +46,9 @@ public sealed class OllamaDocumentAnalyzer : IDocumentAnalyzer
 
         var envelope = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(cancellationToken);
         var content = envelope?.Message?.Content;
-        return content is null ? null : Parse(content);
+        var result = content is null ? null : Parse(content);
+        _logger.LogDebug("analysis done — sender: {Sender}, type: {Type}", result?.Sender ?? "unknown", result?.DocumentType ?? "unknown");
+        return result;
     }
 
     // parsing split out so it's testable without a running model

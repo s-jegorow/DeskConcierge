@@ -2,6 +2,7 @@ using DeskConcierge.Core.Abstractions;
 using DeskConcierge.Core.Application;
 using DeskConcierge.Core.Domain;
 using DeskConcierge.Core.Pipeline;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace DeskConcierge.Core.Tests.Application;
@@ -15,7 +16,7 @@ public class DocumentReprocessorTests
         var document = new Document(inboxFile, "hash-1");
         var repository = new FakeRepository(document);
         var archive = new FakeArchive();
-        var reprocessor = new DocumentReprocessor(repository, new FakeOcrEngine(), new FieldExtractor(), new FakeAnalyzer(), archive);
+        var reprocessor = new DocumentReprocessor(repository, new FakeOcrEngine(), new FieldExtractor(), new FakeAnalyzer(), archive, NullLogger<DocumentReprocessor>.Instance);
 
         var count = await reprocessor.ReprocessInboxAsync();
 
@@ -31,7 +32,7 @@ public class DocumentReprocessorTests
         var document = new Document("/store/2026/Acme/file.png", "hash-2");
         var repository = new FakeRepository(document);
         var archive = new FakeArchive();
-        var reprocessor = new DocumentReprocessor(repository, new FakeOcrEngine(), new FieldExtractor(), new FakeAnalyzer(), archive);
+        var reprocessor = new DocumentReprocessor(repository, new FakeOcrEngine(), new FieldExtractor(), new FakeAnalyzer(), archive, NullLogger<DocumentReprocessor>.Instance);
 
         var count = await reprocessor.ReprocessInboxAsync();
 
@@ -46,7 +47,7 @@ public class DocumentReprocessorTests
         var document = new Document("/inbox/missing.png", "hash-3");
         var repository = new FakeRepository(document);
         var archive = new FakeArchive();
-        var reprocessor = new DocumentReprocessor(repository, new FakeOcrEngine(), new FieldExtractor(), new FakeAnalyzer(), archive);
+        var reprocessor = new DocumentReprocessor(repository, new FakeOcrEngine(), new FieldExtractor(), new FakeAnalyzer(), archive, NullLogger<DocumentReprocessor>.Instance);
 
         var count = await reprocessor.ReprocessInboxAsync();
 

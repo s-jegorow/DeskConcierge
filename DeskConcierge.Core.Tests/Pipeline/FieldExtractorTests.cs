@@ -49,6 +49,24 @@ public class FieldExtractorTests
     }
 
     [Fact]
+    public void Extract_PrefersFutureDateOverPast()
+    {
+        // past date appears first in text — should still return the future one (the deadline)
+        var fields = _extractor.Extract("Ausgestellt am 01.01.2026, Zahlungsziel 30.12.2026.");
+
+        Assert.NotNull(fields.Date);
+        Assert.Equal("30.12.2026", fields.Date!.Value);
+    }
+
+    [Fact]
+    public void Extract_InvalidOcrDate_IsDiscarded()
+    {
+        var fields = _extractor.Extract("Datum: 32.13.2026");
+
+        Assert.Null(fields.Date);
+    }
+
+    [Fact]
     public void Extract_Amount_ReadsGermanFormat()
     {
         var fields = _extractor.Extract("Gesamtbetrag: 1.234,56 EUR");
