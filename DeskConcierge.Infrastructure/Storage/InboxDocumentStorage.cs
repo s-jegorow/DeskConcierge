@@ -11,8 +11,9 @@ public sealed class InboxDocumentStorage : IDocumentStorage
     {
         Directory.CreateDirectory(InboxPath);
 
-        // keeping the original filename verbatim, might need sanitizing later (path separators, duplicates)
-        var storedPath = Path.Combine(InboxPath, $"{Guid.NewGuid():N}_{fileName}");
+        // fixed it: strip any directory parts from the filename, otherwise something like ../../etc/passwd would escape the inbox
+        var safeName = Path.GetFileName(fileName);
+        var storedPath = Path.Combine(InboxPath, $"{Guid.NewGuid():N}_{safeName}");
 
         await using var target = File.Create(storedPath);
         await content.CopyToAsync(target, cancellationToken);
